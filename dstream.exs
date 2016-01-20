@@ -2,23 +2,16 @@ defmodule DStream do
   def stream_from(p) do
     send(p, {:register, self()})
     Stream.unfold(nil, fn _ ->
-      IO.puts "unfold requested a value"
       receive do
-        {:data, value} ->
-          IO.puts "providing value: #{value}"
-          {value, nil}
-        :done ->
-          IO.puts "done, signaling end of stream"
-          nil
+        {:data, value} -> {value, nil}
+        :done -> nil
       end
     end)
   end
 
   def of(stream) do
     spawn fn ->
-      IO.puts "gathering subscribers"
       subs = gather_subscribers([])
-      IO.puts "pushing stream"
       push_stream(stream, subs)
     end
   end
