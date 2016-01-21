@@ -61,6 +61,10 @@ defmodule DStream do
       send(client, {self(), :done})
     end
   end
+
+  def on_new_proc(stream) do
+    unpack(pack(stream))
+  end
   
   def test() do
     small? = fn x ->
@@ -71,11 +75,15 @@ defmodule DStream do
       IO.puts "odd? on #{inspect self()}"
       rem(x, 2) != 0
     end
+    square = fn x ->
+      IO.puts "square on #{inspect self()}"
+      x * x
+    end
 
-    source1 = pack(1..10)
-    source2 = unpack(source1) |> Stream.filter(small?) |> pack
-    source3 = unpack(source2) |> Stream.filter(odd?) |> pack
-    unpack(source3) |> Enum.to_list
+    1..10 |>
+      on_new_proc |> Stream.filter(small?) |>
+      on_new_proc |> Stream.filter(odd?) |> Stream.map(square) |>
+      Enum.to_list
   end
   
 end
