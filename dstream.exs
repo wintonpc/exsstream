@@ -67,6 +67,8 @@ defmodule DStream do
   end
   
   def test() do
+    import Stream
+    
     small? = fn x ->
       trace("small?", x)
       x <= 5
@@ -88,11 +90,11 @@ defmodule DStream do
       inspect(x)
     end
 
-    n = Stream.unfold(1, up_to(3)) |> div
-    a = n |> Stream.map(square) |> div
-    b = n |> Stream.map(negate) |> div
-    c = Stream.zip(a, b) |> div
-    d = c |> Stream.map(to_s)
+    n = unfold(1, up_to(3)) |> div
+    a = n |> map(square) |> div
+    b = n |> map(negate) |> div
+    c = zip(a, b) |> div
+    d = c |> map(to_s)
     Enum.to_list(d)
   end
 
@@ -112,3 +114,5 @@ defmodule DStream do
   end
   
 end
+
+DStream.test()
