@@ -3,18 +3,12 @@ defmodule DStream do
     uniq = make_ref
     Stream.unfold false, fn subscribed? ->
       unless subscribed? do
-#        IO.puts "stream unfolding on #{inspect self()} with uniq = #{inspect uniq}"
         send(bcast_proc, {:subscribe, {self(), uniq}})
         subscribed? = true
       end
-      IO.puts "wait #{inspect uniq} on #{inspect self()}"
       receive do
-        {_, ^uniq, {:datum, value}} ->
-          IO.puts "rcvd #{value} #{inspect uniq}"
-          {value, subscribed?}
-        {_, ^uniq, :done} ->
-          IO.puts "rcvd :done #{inspect uniq}"
-          nil
+        {^uniq, {:datum, value}} -> {value, subscribed?}
+        {^uniq, :done} -> nil
       end
     end
   end
@@ -26,7 +20,6 @@ defmodule DStream do
   end
 
   defp broadcaster(source, items, subs, done?) do
-    #IO.puts "broadcaster(#{inspect source}, #{inspect items}, #{inspect subs})"
     receive do
       {^source, :item, item} ->
         broadcast([item], subs)
@@ -55,8 +48,7 @@ defmodule DStream do
   
   defp broadcast_msg(subs, msg) do
     Enum.each subs, fn {p, uniq} ->
-      IO.puts "send #{inspect msg} #{inspect(uniq)} on #{inspect p}"
-      send(p, {self(), uniq, msg})
+      send(p, {uniq, msg})
     end
   end
 
@@ -70,36 +62,53 @@ defmodule DStream do
     end
   end
 
-  def on_new_proc(stream) do
+  def div(stream) do
     unpack(pack(stream))
   end
   
   def test() do
     small? = fn x ->
-      IO.puts "small?(#{x}) on #{inspect self()}"
+      trace("small?", x)
       x <= 5
     end
     odd? = fn x ->
-      IO.puts "odd? on #{inspect self()}"
+      trace("odd?", x)
       rem(x, 2) != 0
     end
     square = fn x ->
-      IO.puts "square(#{x}) on #{inspect self()}"
+      trace("square", x)
       x * x
     end
     negate = fn x ->
-      IO.puts "negate(#{x}) on #{inspect self()}"
+      trace("negate", x)
       -x
     end
+    to_s = fn x ->
+      trace("to_s", x)
+      inspect(x)
+    end
 
-    a = 2..4   |> on_new_proc # |> Stream.map(square)
-    b = 12..14 |> on_new_proc # |> Stream.map(negate)
+    n = Stream.unfold(1, up_to(3)) |> div
+    a = n |> Stream.map(square) |> div
+    b = n |> Stream.map(negate) |> div
+    c = Stream.zip(a, b) |> div
+    d = c |> Stream.map(to_s)
+    Enum.to_list(d)
+  end
 
-    # {Enum.to_list(a), Enum.to_list(b)}
-    
-    #IO.puts(inspect(Enum.to_list(a)))
-    #IO.puts(inspect(Enum.to_list(b)))
-    Stream.zip(a, b) |> Enum.to_list
+  def up_to(max) do
+    fn next ->
+      if next <= max do
+        trace("generate", next)
+        {next, next+1}
+      else
+        nil
+      end
+    end
+  end
+
+  defp trace(name, arg) do
+    IO.puts "#{name}(#{inspect arg}) on #{inspect self()}"
   end
   
 end
