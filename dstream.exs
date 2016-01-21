@@ -1,13 +1,19 @@
 defmodule DStream do
   def unpack(bcast_proc) do
+    uniq = make_ref
+    IO.puts "stream unfolding with uniq = #{inspect uniq}"
     Stream.unfold false, fn subscribed? ->
       unless subscribed? do
-        send(bcast_proc, {:subscribe, self()})
+        send(bcast_proc, {:subscribe, {self(), uniq}})
         subscribed? = true
       end
       receive do
-        {bcast_proc, :datum, value} -> {value, subscribed?}
-        {bcast_proc, :done} -> nil
+        {bcast_proc, uniq, {:datum, value}} ->
+          IO.puts "stream unfold got #{inspect({bcast_proc, uniq, {:datum, value}})}"
+          {value, subscribed?}
+        {bcast_proc, uniq, :done} ->
+          IO.puts "stream unfold got #{inspect({bcast_proc, uniq, :done})}"
+          nil
       end
     end
   end
@@ -38,17 +44,17 @@ defmodule DStream do
 
   defp broadcast(items, subs) do
     Enum.each items, fn item ->
-      broadcast_msg(subs, {self(), :datum, item})
+      broadcast_msg(subs, {:datum, item})
     end
   end
 
   defp broadcast_done(subs) do
-    broadcast_msg(subs, {self(), :done})
+    broadcast_msg(subs, :done)
   end
   
   defp broadcast_msg(subs, msg) do
-    Enum.each subs, fn sub ->
-      send(sub, msg)
+    Enum.each subs, fn {p, uniq} ->
+      send(p, {self(), uniq, msg})
     end
   end
 
@@ -79,11 +85,21 @@ defmodule DStream do
       IO.puts "square on #{inspect self()}"
       x * x
     end
+    negate = fn x ->
+      IO.puts "negate on #{inspect self()}"
+      -x
+    end
 
-    1..10 |>
+    a = 1..10 |>
       on_new_proc |> Stream.filter(small?) |>
-      on_new_proc |> Stream.filter(odd?) |> Stream.map(square) |>
-      Enum.to_list
+      on_new_proc |> Stream.filter(odd?) |> Stream.map(square)
+
+    b = 1..3 |>
+      on_new_proc |> Stream.map(negate)
+
+    #IO.puts(inspect(Enum.to_list(a)))
+    #IO.puts(inspect(Enum.to_list(b)))
+    Stream.zip(a, b) |> Enum.to_list
   end
   
 end
