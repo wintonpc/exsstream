@@ -1,14 +1,15 @@
 defmodule DStream do
-  def unpack(p) do
-    send(p, {:register, self()})
-    Stream.unfold(nil, fn _ ->
-      receive do
-        {:data, value} ->
-          IO.puts "got value: #{value}"
-          {value, nil}
-        :done -> nil
+  def unpack(bcast_proc) do
+    Stream.unfold false, fn subscribed? ->
+      unless subscribed? do
+        send(bcast_proc, {:subscribe, self()})
+        subscribed? = true
       end
-    end)
+      receive do
+        {bcast_proc, :datum, value} -> {value, subscribed?}
+        {bcast_proc, :done} -> nil
+      end
+    end
   end
 
   def pack(stream) do
@@ -18,7 +19,7 @@ defmodule DStream do
   end
 
   defp broadcaster(source, items, subs, done?) do
-    IO.puts "broadcaster(#{inspect source}, #{inspect items}, #{inspect subs})"
+    #IO.puts "broadcaster(#{inspect source}, #{inspect items}, #{inspect subs})"
     receive do
       {source, :item, item} ->
         broadcast([item], subs)
@@ -61,34 +62,20 @@ defmodule DStream do
     end
   end
   
-  def unleash(dstreams) do
-    Enum.each(dstreams, fn ds -> send(ds, :start) end)
-  end
-  
-  defp gather_subscribers(subs) do
-    receive do
-      {:register, s} -> gather_subscribers([s|subs])
-      :start -> subs
-    end
-  end
-
-  defp push_stream(stream, subs) do
-    Enum.each(stream, fn value -> multicast({:data, value}, subs) end)
-    multicast(:done, subs)
-  end
-
-  defp multicast(msg, subs) do
-    IO.puts "multicast #{inspect msg}"
-    Enum.each(subs, fn sub -> send(sub, msg) end)
-  end
-
   def test() do
-    odd? = &(rem(&1, 2) != 0)
+    small? = fn x ->
+      IO.puts "small? on #{inspect self()}"
+      x <= 5
+    end
+    odd? = fn x ->
+      IO.puts "odd? on #{inspect self()}"
+      rem(x, 2) != 0
+    end
 
-    source = pack(1..5)
-    reader = unpack(pack(Stream.filter(unpack(source), odd?)))
-    DStream.unleash([source])
-    reader |> Enum.to_list
+    source1 = pack(1..10)
+    source2 = unpack(source1) |> Stream.filter(small?) |> pack
+    source3 = unpack(source2) |> Stream.filter(odd?) |> pack
+    unpack(source3) |> Enum.to_list
   end
   
 end
