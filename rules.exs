@@ -19,7 +19,7 @@ defmodule Rules do
     import Enum
     each ordered_rules(list), fn r ->
       args = r.deps |> map(&find/1) |> map(&(&1.stream)) |> to_list
-      stream = r.stream_gen.(args)
+      stream = DStream.div(r.stream_gen.(args))
       set_stream(r, stream)
     end
   end
@@ -58,11 +58,52 @@ defmodule Rules do
   end
 
   def test do
-    Rules.define_rule("foo", [], fn([]) -> 1..5 end)
-    Rules.define_rule("bar", ["foo"], fn([f]) -> f |> Stream.map(&(&1 * &1)) end)
+    import Stream
+    
+    small? = fn x ->
+      trace("small?", x)
+      x <= 5
+    end
+    odd? = fn x ->
+      trace("odd?", x)
+      rem(x, 2) != 0
+    end
+    square = fn x ->
+      trace("square", x)
+      x * x
+    end
+    negate = fn x ->
+      trace("negate", x)
+      -x
+    end
+    to_s = fn x ->
+      trace("to_s", x)
+      inspect(x)
+    end
+
+    Rules.define_rule("a", [], fn([]) -> unfold(1, up_to(5)) end)
+    Rules.define_rule("b", ["a"], fn([a]) -> a |> map(square) end)
+    Rules.define_rule("c", ["a"], fn([a]) -> a |> map(negate) end)
+    Rules.define_rule("d", ["b", "c"], fn([b, c]) -> zip(b, c) end)
     Rules.wire
-    Rules.find("bar").stream
+    Rules.find("d").stream
   end
+
+  def up_to(max) do
+    fn next ->
+      if next <= max do
+        trace("generate", next)
+        {next, next+1}
+      else
+        nil
+      end
+    end
+  end
+  
+  defp trace(name, arg) do
+    IO.puts "#{name}(#{inspect arg}) on #{inspect self()}"
+  end
+
 end
 
 IO.puts inspect(Enum.to_list(Rules.test))
