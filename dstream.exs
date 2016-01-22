@@ -116,3 +116,6 @@ defmodule DStream do
 end
 
 DStream.test()
+
+foo = defmodule Foo do
+end
